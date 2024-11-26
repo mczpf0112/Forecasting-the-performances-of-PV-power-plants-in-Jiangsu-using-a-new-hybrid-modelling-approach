@@ -6,10 +6,14 @@ Here, the winter data of plant 1 is used for ultra-short term forecasting as an 
 ### Example 1. Proposed model
 ```r
 source('code of proposed model.R')
+
+# Data source
 data <- read_excel("/Users/machang/Desktop/2023/new/plant1.xlsx")
 data[] <- lapply(data, as.numeric)
 train_data <- data[1:1157, ] 
 test_data <- data[1158:1170, ]
+
+# It is classified according to the real output power
 category0 <- train_data[train_data$power == 0, ]
 category1 <- train_data[train_data$power != 0, ]
 new_data <- category1
@@ -22,7 +26,11 @@ z_direct <- (new_data$`direct solar radiation` - mean_value2) / sd_value2
 mean_value3 <- mean(new_data$power)
 sd_value3 <- sd(new_data$power)
 z_power <- (new_data$power - mean_value3) / sd_value3
+
+#Integrate data belonging to category 1 into new data
 input_data <- array(c(z_total, z_direct, z_power), dim = c(length(z_total), 1, 3))
+
+#Define a fitness function used for optimizing a model
 fitness <- function(params) {
   tryCatch({
     nodes <- as.integer(params[1]) 
@@ -51,6 +59,8 @@ fitness <- function(params) {
     return(NA)  
   })
 }
+
+# Genetic algorithm is used to optimize two hyperparameters of the LSTM model: the number of nodes in the LSTM layer and the learning rate
 set.seed(123)
 lower_bounds <- c(32, 0.001)
 upper_bounds <- c(128, 0.1)
@@ -67,9 +77,15 @@ best_params <- ga_result@solution[1, ]
 cat("Best Parameters (corresponding to the minimum fitness value): \n")
 cat("Nodes:", best_params[1], ", Learning Rate:", best_params[2], "\n")
 cat("Minimum Fitness Value:", best_fitness, "\n")
+
+#Extract best parameters
 best_nodes <- best_params[1]
 best_learning_rate <- best_params[2]
+
+#Define the best model
 best_model <- keras_model_sequential()
+
+#Compile the model
 best_model %>%
   layer_lstm(units = best_nodes, input_shape = c(1, 3)) %>%
   layer_dense(units = 1)
@@ -77,6 +93,8 @@ best_model %>% compile(
   loss = 'mean_squared_error',
   optimizer = optimizer_adam(lr = best_learning_rate)
 )
+
+#Train the model
 history <- best_model %>% fit(
   x = input_data,
   y = z_power,
@@ -84,6 +102,8 @@ history <- best_model %>% fit(
   batch_size = 32,
   verbose = 1
 )
+
+#Fitting the logistic regression model and recording accuracy, precision, recall rate
 xreg_data <- train_data[, c("direct solar radiation")]
 y <- ifelse(train_data$power == 0, 0, 1)  
 log_reg_model <- glm(y ~ ., data = xreg_data, family = "binomial")
@@ -95,6 +115,8 @@ precision <- conf_matrix[2, 2] / sum(conf_matrix[, 2])
 print(precision)
 recall <- conf_matrix[2, 2] / sum(conf_matrix[2, ])
 print(recall)
+
+#Making predictions
 xreg_data <- test_data[, c("direct solar radiation")]
 y <- ifelse(test_data$power == 0, 0, 1)  
 log_reg_model <- glm(y ~ ., data = xreg_data, family = "binomial")
@@ -123,6 +145,8 @@ sd_value3 <-sd(new_data1$power)
 z_power <-(new_data1$power-mean_value3)/sd_value3
 z_power_3d <- array_reshape(z_power, c(length(z_power), 1, 1))
 test_input <- array(c(z_total, z_direct,z_power), dim = c(length(z_total), 1, 3)) 
+
+#Using the best LSTM model for forecasting in category 1
 validation_pred <- best_model %>% predict(test_input)
 print(validation_pred)
 mean_power <- mean(test_data$power, na.rm = TRUE)
@@ -134,8 +158,12 @@ print(denormalized_forecast)
 denormalized_forecast <- pmax(denormalized_forecast, 0)
 print(denormalized_forecast)
 new_forecast <- rep(0, nrow(test_data))
+
+#Combination the predicted value from category 0 and category 1
 new_forecast[index_class_1] <- denormalized_forecast
 print(new_forecast)
+
+#RMSE calculation
 RMSE <- sqrt(mean((new_forecast- test_data$power)^2))
 print(RMSE)
 ```
