@@ -1,7 +1,8 @@
 # 2-step procedure
 Forecasting the performances of photovoltaic power plants in Jiangsu(China) using a new hybrid modelling approach
 ## Example
-Note: The proposed model and LSTM model both require the installation of the following R packages: glmnet, readxl, keras, and GA before they can be used.
+Note: The proposed model and LSTM model both require the installation of the following R packages: glmnet, readxl, keras, and GA before they can be used. The smart persistence model need to load the 'suncalc' package and call the Python 'PVLIB' package in R via the 'reticulate' package.
+
 Here, the winter data of plant 1 is used for ultra-short term forecasting as an example to illustrate the three models used in the paper.
 ### Example 1. Proposed model
 ```r
@@ -303,7 +304,40 @@ print(result_df$ZenithAngle)
 #2. Only after obtaining the physical information of the above two can a smart persistence model be trained
 source('code of smart persistence model.R')
 
+# The resulting physical information is put into the original data set for easy training
+data <- read_excel("/Users/machang/Desktop/2023/new/plant1.xlsx")
+data[] <- lapply(data, as.numeric)  
+train_data <- data[1:1170, ]  
+test_data <- data[1158:1170, ]  
+cos_zenith_train <- cos(train_data$`zenith angle`)
+cos_zenith_train[cos_zenith_train < 0] <- 0
 
+# Calculate Global Horizontal Irradiance for training set
+ghi_train <- train_data$`direct solar radiation` + 
+  train_data$`scattered radiation` * cos_zenith_train
+ghi_clear_sky_train <- train_data$`GHI clear shy`
+power_train <- train_data$power
 
+# Calculate Scaling Constant
+C <- max(power_train, na.rm = TRUE) / max(ghi_clear_sky_train, na.rm = TRUE)
+print(C)
+cos_zenith_test <- cos(test_data$`zenith angle`)
+cos_zenith_test[cos_zenith_test < 0] <- 0
+ghi_test_direct <- test_data$`direct solar radiation`
+ghi_test_scattered <- test_data$`scattered radiation` * cos_zenith_test
+ghi_test <- ghi_test_direct + ghi_test_scattered
+print(ghi_test_direct)
+print(ghi_test_scattered)
+print(ghi_test)
+
+#Calculate Clearness Index
+ghi_test_clear_sky <-test_data$`GHI clear shy`
+Kt_test <- ghi_test / ghi_test_clear_sky
+Kt_test[is.na(Kt_test) | is.infinite(Kt_test)] <- 0
+
+# Formula of smart peristence model
+predicted_power <- C * Kt_test * ghi_test_clear_sky
+print("Predicted Power:")
+print(predicted_power)
 
 ```
