@@ -170,7 +170,7 @@ print(RMSE)
 ```
 ### Example 2. LSTM model
 ```r
-source('code of lstm model.R')
+source('code of LSTM model.R')
 # It is similar to the proposed model except that the classification step is missing
 data <- read_excel("/Users/machang/Desktop/2023/new/plant1.xlsx")
 data[] <- lapply(data, as.numeric)
